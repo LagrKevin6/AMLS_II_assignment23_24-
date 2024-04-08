@@ -1,6 +1,19 @@
 import subprocess
 import os
 
+import numpy as np
+from skimage.metrics import peak_signal_noise_ratio as psnr
+from skimage.metrics import structural_similarity as ssim
+from skimage.metrics import mean_squared_error as mse
+from skimage.io import imread
+from skimage import img_as_float
+from skimage.transform import resize
+
+import lpips
+import torch
+from PIL import Image
+from torchvision.transforms import ToTensor
+
 # Train command
 command = [
     'python', 'train_pasd.py',
@@ -22,6 +35,41 @@ command = [
     '--mixed_precision=fp16',
     '--dataloader_num_workers=4'
 ]
+
+def evaluate_images(original_path, super_res_path):
+    # Loading images
+    original = img_as_float(imread(original_path))
+    super_res = img_as_float(imread(super_res_path))
+    
+    # resizing the sr images if needed
+    if original.shape != super_res.shape:
+        super_res = resize(super_res, original.shape, anti_aliasing=True)
+
+    # Calculate PSNR, SSIM and MSE
+    psnr_value = psnr(original, super_res, data_range=original.max() - original.min())
+    ssim_value = ssim(original, super_res, win_size=5, data_range= 1 ,channel_axis=-1)
+    mse_value = mse(original, super_res)
+    
+    return psnr_value, ssim_value, mse_value
+
+def load_image_as_tensor(image_path):
+    image = Image.open(image_path).convert('RGB')
+    tensor = ToTensor()(image).unsqueeze(0)  # Add batch dimension
+    return tensor
+
+def evaluate_lpips(original_path, super_res_path, model = lpips.LPIPS(net='alex')):
+    
+    # load images as tensors
+    image1 = load_image_as_tensor(original_path)
+    image2 = load_image_as_tensor(super_res_path)  
+
+    image1, image2 = image1.cuda(), image2.cuda()
+    model = model.cuda()  
+
+    with torch.no_grad():
+        distance = model(image1, image2)
+
+    return distance.item()
 
 def main():
     # Train command
@@ -131,6 +179,36 @@ def main():
     ]
 
     subprocess.run(command_eval)
+
+    original_folder = "..\DIV2K_valid_HR\DIV2K_valid_HR"
+    super_res_folder = "validation_output"
+
+    # loading alex model for lpips eval
+    lpips_model = lpips.LPIPS(net='alex')
+
+    psnr_aver, ssim_aver, mse_aver, lpips_aver = [], [], [], []
+
+    # Assuming file names are consistent between folders
+    for file_name in os.listdir(super_res_folder):
+
+        # trimming the output file name
+        file_name_s = file_name[:-6] + file_name[-4:]
+
+        original_path = os.path.join(original_folder, file_name_s)
+        super_res_path = os.path.join(super_res_folder, file_name)
+
+        # Evaluate images
+        psnr_value, ssim_value, mse_value = evaluate_images(original_path, super_res_path)
+        lpips_value = evaluate_lpips(original_path, super_res_path)
+        
+        psnr_aver.append(psnr_value)
+        ssim_aver.append(ssim_value)
+        mse_aver.append(mse_value)
+        lpips_aver.append(lpips_value)
+
+    print(f"PSNR = {np.mean(psnr_aver)}, SSIM = {np.mean(ssim_aver)}, MSE = {np.mean(mse_aver)}, LPIPS = {np.mean(lpips_aver)}")
+
+
 
 if __name__ == "__main__":
     main()
