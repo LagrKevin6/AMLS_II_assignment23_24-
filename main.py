@@ -14,28 +14,6 @@ import torch
 from PIL import Image
 from torchvision.transforms import ToTensor
 
-# Train command
-command = [
-    'python', 'train_pasd.py',
-    '--use_pasd_light',
-    '--dataset_name=DIV2K',
-    '--pretrained_model_name_or_path=checkpoints/stable-diffusion-v1-5',
-    '--output_dir=runs/pasd',
-    '--resolution=512',
-    '--learning_rate=5e-5',
-    '--gradient_accumulation_steps=2',
-    '--train_batch_size=2',
-    '--tracker_project_name=pasd',
-    '--control_type=realisr',
-    '--logging_dir=logs',
-    '--train_shards_path_or_url=None',
-    '--max_train_samples=100000',
-    '--num_train_epochs=100',
-    '--checkpointing_steps=1000',
-    '--mixed_precision=fp16',
-    '--dataloader_num_workers=4'
-]
-
 def evaluate_images(original_path, super_res_path):
     # Loading images
     original = img_as_float(imread(original_path))
@@ -75,7 +53,7 @@ def main():
     # Train command
     command_train = [
         'python', 'PASD-main/train_pasd.py',
-        '--use_pasd_light',
+        #'--use_pasd_light',
         '--dataset_name=DIV2K',
         '--pretrained_model_name_or_path=checkpoints/stable-diffusion-v1-5',
         '--output_dir=runs/pasd',
